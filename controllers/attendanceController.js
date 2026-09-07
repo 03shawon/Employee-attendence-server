@@ -3,19 +3,26 @@ const nodemailer = require('nodemailer');
 
 const handleScan = async (req, res) => {
   try {
-    // ১. ক্লায়েন্টের IP নেওয়া এবং IPv6 ফরম্যাট ফিল্টার করা
+    // ১. ক্লায়েন্টের IP নেওয়া এবং IPv6 ফরম্যাট ফিল্টার করা
     const forwarded = req.headers['x-forwarded-for'];
     const rawIP = forwarded ? forwarded.split(',')[0] : req.socket.remoteAddress;
     const clientIP = rawIP ? rawIP.replace(/^.*:/, '').trim() : '';
 
-    const allowedIP = process.env.OFFICE_STATIC_IP;
+    const allowedIPsString = process.env.OFFICE_STATIC_IP || '';
     const isLocalhost = clientIP === '127.0.0.1' || clientIP === '1' || clientIP === 'localhost' || clientIP === '::1';
 
-    // ২. IP চেক করা (যদি .env-এ IP দেওয়া থাকে এবং লোকালহস্ট না হয়)
-    if (allowedIP && !isLocalhost && clientIP !== allowedIP) {
+    // .env থেকে কমা দিয়ে একাধিক IP / Prefix আলাদা করা
+    const allowedPrefixes = allowedIPsString
+      ? allowedIPsString.split(',').map(ip => ip.trim())
+      : [];
+
+    // IP যাচাইকরণ (Prefix Matching)
+    const isAllowed = allowedPrefixes.some(prefix => clientIP.startsWith(prefix));
+
+    if (allowedPrefixes.length > 0 && !isLocalhost && !isAllowed) {
       return res.status(403).json({ 
         success: false, 
-        message: 'এটেনডেন্স শুধুমাত্র অফিসের ওয়াইফাই নেটওয়ার্ক থেকে দেওয়া সম্ভব।' 
+        message: 'এটেনডেন্স শুধুমাত্র অফিসের ওয়াইফাই নেটওয়ার্ক থেকে দেওয়া সম্ভব।' 
       });
     }
 
@@ -27,8 +34,14 @@ const handleScan = async (req, res) => {
       return res.status(401).json({ success: false, message: 'Invalid Employee ID or PIN' });
     }
 
-    const today = new Date().toISOString().split('T')[0];
-    const currentTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    // বাংলাদেশ সময় অনুযায়ী Date ও Time ফরম্যাট করা
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' }); // YYYY-MM-DD
+    const currentTime = new Date().toLocaleTimeString('en-US', {
+      timeZone: 'Asia/Dhaka',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
 
     if (type === 'in') {
       const existingRecord = await db.collection("attendances").findOne({ employeeId, date: today });
@@ -39,9 +52,11 @@ const handleScan = async (req, res) => {
       const settings = await db.collection("settings").findOne({}) || { lateThreshold: "09:15" };
       const [cutoffHour, cutoffMinute] = settings.lateThreshold.split(':').map(Number);
 
-      const now = new Date();
-      const cutoff = new Date();
-      cutoff.setHours(cutoffHour, cutoffMinute, 0);
+      // বাংলাদেশ টাইমে Late গণনা
+      const bdTimeString = new Date().toLocaleString('en-US', { timeZone: 'Asia/Dhaka' });
+      const bdNow = new Date(bdTimeString);
+      const currentMinutes = bdNow.getHours() * 60 + bdNow.getMinutes();
+      const cutoffMinutes = cutoffHour * 60 + cutoffMinute;
 
       const newRecord = {
         employeeId: employee.employeeId,
@@ -51,7 +66,7 @@ const handleScan = async (req, res) => {
         checkIn: currentTime,
         checkOut: null,
         workingHours: '-',
-        status: now > cutoff ? 'Late' : 'On Time',
+        status: currentMinutes > cutoffMinutes ? 'Late' : 'On Time',
         createdAt: new Date()
       };
 
@@ -79,7 +94,8 @@ const handleScan = async (req, res) => {
 const getDashboardStats = async (req, res) => {
   try {
     const db = getDB();
-    const today = new Date().toISOString().split('T')[0];
+    // বাংলাদেশ তারিখ অনুযায়ী তথ্য ফিল্টার করা
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
 
     const totalEmployees = await db.collection("employees").countDocuments();
     const todayRecords = await db.collection("attendances").find({ date: today }).toArray();

@@ -9,7 +9,7 @@ const settingsRoutes = require('./routes/settingsRoutes');
 
 const app = express();
 
-// IP সঠিকভাবে ট্র্যাক করার জন্য
+// Vercel Reverse Proxy-র মাধ্যমে আসল Public IP ট্র্যাক করার জন্য
 app.set('trust proxy', true);
 
 const PORT = process.env.PORT || 5000;
@@ -31,3 +31,6 @@ connectDB().then(() => {
     console.log(`Server is running on http://localhost:${PORT}`);
   });
 });
+
+// Vercel Serverless Function Export (জরুরি)
+module.exports = app;
