@@ -3,7 +3,7 @@ const nodemailer = require('nodemailer');
 
 const handleScan = async (req, res) => {
   try {
-    // ১. ক্লায়েন্টের IP নেওয়া এবং IPv6 ফরম্যাট ফিল্টার করা
+    // ১. ক্লায়েন্টের IP উদ্ধার করা
     const forwarded = req.headers['x-forwarded-for'];
     const rawIP = forwarded ? forwarded.split(',')[0] : req.socket.remoteAddress;
     const clientIP = rawIP ? rawIP.replace(/^.*:/, '').trim() : '';
@@ -11,12 +11,12 @@ const handleScan = async (req, res) => {
     const allowedIPsString = process.env.OFFICE_STATIC_IP || '';
     const isLocalhost = clientIP === '127.0.0.1' || clientIP === '1' || clientIP === 'localhost' || clientIP === '::1';
 
-    // .env থেকে কমা দিয়ে একাধিক IP / Prefix আলাদা করা
+    // .env থেকে কমা দিয়ে একাধিক IP / Subnet Prefix আলাদা করা
     const allowedPrefixes = allowedIPsString
       ? allowedIPsString.split(',').map(ip => ip.trim())
       : [];
 
-    // IP যাচাইকরণ (Prefix Matching)
+    // Subnet Prefix Matching (যেমন: 103.112.65. বা 103.191.98.)
     const isAllowed = allowedPrefixes.some(prefix => clientIP.startsWith(prefix));
 
     if (allowedPrefixes.length > 0 && !isLocalhost && !isAllowed) {
@@ -34,8 +34,8 @@ const handleScan = async (req, res) => {
       return res.status(401).json({ success: false, message: 'Invalid Employee ID or PIN' });
     }
 
-    // বাংলাদেশ সময় অনুযায়ী Date ও Time ফরম্যাট করা
-    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' }); // YYYY-MM-DD
+    // বাংলাদেশ সময়জোনে (Asia/Dhaka) Date ও Time নির্ধারণ
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
     const currentTime = new Date().toLocaleTimeString('en-US', {
       timeZone: 'Asia/Dhaka',
       hour: '2-digit',
@@ -52,7 +52,7 @@ const handleScan = async (req, res) => {
       const settings = await db.collection("settings").findOne({}) || { lateThreshold: "09:15" };
       const [cutoffHour, cutoffMinute] = settings.lateThreshold.split(':').map(Number);
 
-      // বাংলাদেশ টাইমে Late গণনা
+      // Late চেক করার জন্য মিনিট হিসাব (Asia/Dhaka)
       const bdTimeString = new Date().toLocaleString('en-US', { timeZone: 'Asia/Dhaka' });
       const bdNow = new Date(bdTimeString);
       const currentMinutes = bdNow.getHours() * 60 + bdNow.getMinutes();
@@ -94,7 +94,6 @@ const handleScan = async (req, res) => {
 const getDashboardStats = async (req, res) => {
   try {
     const db = getDB();
-    // বাংলাদেশ তারিখ অনুযায়ী তথ্য ফিল্টার করা
     const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
 
     const totalEmployees = await db.collection("employees").countDocuments();
