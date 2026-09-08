@@ -1,8 +1,8 @@
 const express = require('express');
-const { getSettings, updateSettings } = require('../controllers/settingsController');
 const router = express.Router();
+const { getSettings, updateSettings } = require('../controllers/settingsController');
 
 router.get('/', getSettings);
-router.put('/', updateSettings);
+router.post('/', updateSettings);
 
 module.exports = router;

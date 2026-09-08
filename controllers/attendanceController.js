@@ -62,6 +62,7 @@ const handleScan = async (req, res) => {
         employeeId: employee.employeeId,
         name: employee.name,
         department: employee.department,
+        designation: employee.designation,
         date: today,
         checkIn: currentTime,
         checkOut: null,
@@ -69,6 +70,7 @@ const handleScan = async (req, res) => {
         status: currentMinutes > cutoffMinutes ? 'Late' : 'On Time',
         createdAt: new Date()
       };
+      console.log(employee.designation,'from employee object')
 
       await db.collection("attendances").insertOne(newRecord);
       return res.json({ success: true, message: `Checked IN successfully at ${currentTime}` });
@@ -97,7 +99,24 @@ const getDashboardStats = async (req, res) => {
     const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
 
     const totalEmployees = await db.collection("employees").countDocuments();
+    const allEmployees = await db.collection("employees").find({}).toArray();
     const todayRecords = await db.collection("attendances").find({ date: today }).toArray();
+
+    // ১. Employee ID অনুযায়ী দ্রুত খোঁজার জন্য Map তৈরি
+    const employeeMap = {};
+    allEmployees.forEach(emp => {
+      employeeMap[emp.employeeId] = emp;
+    });
+
+    // ২. পুরাতন বা নতুন সকল রেকর্ডে Designation নিশ্চিত করা
+    const enrichedRecords = todayRecords.map(record => {
+      const emp = employeeMap[record.employeeId] || {};
+      return {
+        ...record,
+        department: record.department || emp.department || '-',
+        designation: record.designation || emp.designation || emp.position || emp.role || '-'
+      };
+    });
 
     const presentToday = todayRecords.filter(r => r.checkIn).length;
     const lateToday = todayRecords.filter(r => r.status === 'Late').length;
@@ -110,12 +129,28 @@ const getDashboardStats = async (req, res) => {
       lateToday,
       absentToday,
       checkedOut,
-      records: todayRecords
+      records: enrichedRecords
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+// const getAttendanceLogs = async (req, res) => {
+//   try {
+//     const db = getDB();
+//     const { date, status } = req.query;
+//     let query = {};
+
+//     if (date) query.date = date;
+//     if (status && status !== 'All') query.status = status;
+
+//     const logs = await db.collection("attendances").find(query).sort({ createdAt: -1 }).toArray();
+//     res.json(logs);
+//   } catch (error) {
+//     res.status(500).json({ success: false, message: error.message });
+//   }
+// };
 
 const getAttendanceLogs = async (req, res) => {
   try {
@@ -127,7 +162,25 @@ const getAttendanceLogs = async (req, res) => {
     if (status && status !== 'All') query.status = status;
 
     const logs = await db.collection("attendances").find(query).sort({ createdAt: -1 }).toArray();
-    res.json(logs);
+    const allEmployees = await db.collection("employees").find({}).toArray();
+
+    // Quick lookup map
+    const employeeMap = {};
+    allEmployees.forEach(emp => {
+      employeeMap[emp.employeeId] = emp;
+    });
+
+    // Dynamically attach missing designation & department from employees collection
+    const enrichedLogs = logs.map(log => {
+      const emp = employeeMap[log.employeeId] || {};
+      return {
+        ...log,
+        department: log.department || emp.department || '-',
+        designation: log.designation || emp.designation || emp.position || emp.role || '-'
+      };
+    });
+
+    res.json(enrichedLogs);
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
