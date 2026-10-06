@@ -8,7 +8,12 @@ const attendanceSchema = new mongoose.Schema(
     date: { type: String, required: true },
     checkIn: { type: String },
     checkOut: { type: String },
-    status: { type: String, enum: ['On Time', 'Late', 'Absent'], default: 'On Time' },
+    status: { type: String, enum: ['On Time', 'Late', 'Absent', 'On Leave', 'Field Work'], default: 'On Time' },
+    isFieldWork: { type: Boolean, default: false },
+    fieldWorkReason: { type: String, trim: true },
+    fieldWorkStartTime: { type: String, match: /^([01]\d|2[0-3]):[0-5]\d$/ },
+    fieldWorkEndTime: { type: String, match: /^([01]\d|2[0-3]):[0-5]\d$/ },
+    remarks: { type: String, trim: true },
   },
   { timestamps: true }
 );

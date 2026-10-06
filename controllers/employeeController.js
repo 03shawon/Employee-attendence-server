@@ -14,14 +14,14 @@ const getEmployees = async (req, res) => {
 const addEmployee = async (req, res) => {
   try {
     const db = getDB();
-    const { name, employeeId, department, email, pin } = req.body;
+    const { name, employeeId, department, designation, email, pin } = req.body;
 
     const existing = await db.collection("employees").findOne({ employeeId });
     if (existing) {
       return res.status(400).json({ success: false, message: 'Employee ID already exists' });
     }
 
-    const newEmp = { name, employeeId, department, email, pin, createdAt: new Date() };
+    const newEmp = { name, employeeId, department, designation, email, pin, createdAt: new Date() };
     const result = await db.collection("employees").insertOne(newEmp);
     res.status(201).json({ success: true, insertedId: result.insertedId });
   } catch (error) {
