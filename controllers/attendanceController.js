@@ -633,6 +633,50 @@ const assignFieldWork = async (req, res) => {
   }
 };
 
+const assignHomeOffice = async (req, res) => {
+  try {
+    const db = getDB();
+    const { employeeId, date, note } = req.body;
+
+    if (!employeeId || !date) {
+      return res.status(400).json({ success: false, message: 'Employee ID and date are required.' });
+    }
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return res.status(400).json({ success: false, message: 'Date must be in YYYY-MM-DD format.' });
+    }
+
+    const employee = await db.collection('employees').findOne({ employeeId });
+    if (!employee) {
+      return res.status(404).json({ success: false, message: 'Employee not found.' });
+    }
+
+    await db.collection('attendances').updateOne(
+      { employeeId, date },
+      {
+        $set: {
+          employeeId: employee.employeeId,
+          name: employee.name,
+          department: employee.department || '-',
+          designation: employee.designation || employee.position || employee.role || '-',
+          date,
+          status: 'Home Office',
+          isHomeOffice: true,
+          note: typeof note === 'string' ? note.trim() : '',
+          updatedAt: new Date(),
+        },
+        $unset: { leaveType: '', isFieldWork: '', fieldWorkReason: '', fieldWorkStartTime: '', fieldWorkEndTime: '', remarks: '' },
+        $setOnInsert: { checkIn: null, checkOut: null, workingHours: '-', createdAt: new Date() },
+      },
+      { upsert: true }
+    );
+
+    res.json({ success: true, message: `Home office assigned to ${employee.name} on ${date}.` });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // 🔴 [CHANGE HERE 3]: markManualLeave এক্সপোর্ট অপশনে যুক্ত করা হয়েছে
 module.exports = { 
   handleScan, 
@@ -640,5 +684,6 @@ module.exports = {
   getAttendanceLogs, 
   sendEmailReport, 
   markManualLeave,
-  assignFieldWork
+  assignFieldWork,
+  assignHomeOffice,
 };
